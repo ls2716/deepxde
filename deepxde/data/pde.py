@@ -52,6 +52,7 @@ class PDE(Data):
         solution=None,
         num_test=None,
         auxiliary_var_function=None,
+        custom_train_points=None,
     ):
         self.geom = geometry
         self.pde = pde
@@ -59,9 +60,9 @@ class PDE(Data):
 
         self.num_domain = num_domain
         self.num_boundary = num_boundary
-        if train_distribution not in ["uniform", "pseudo", "sobol"]:
+        if train_distribution not in ["uniform", "pseudo", "sobol", "custom"]:
             raise ValueError(
-                "train_distribution == {}. Available choices: {{'uniform'|'pseudo'|'sobol'}}.".format(
+                "train_distribution == {}. Available choices: {{'uniform'|'pseudo'|'sobol'|'custom'}}.".format(
                     train_distribution
                 )
             )
@@ -80,6 +81,8 @@ class PDE(Data):
         self.test_x, self.test_y = None, None
         self.train_aux_vars, self.test_aux_vars = None, None
 
+        if train_distribution == "custom":
+            self.set_custom_train_points(custom_train_points)
         self.train_next_batch()
         self.test()
 
@@ -93,8 +96,10 @@ class PDE(Data):
                 f = self.pde(model.net.inputs, outputs)
             elif get_num_args(self.pde) == 3:
                 if self.auxiliary_var_fn is None:
-                    raise ValueError("Auxiliary variable function not defined.")
-                f = self.pde(model.net.inputs, outputs, model.net.auxiliary_vars)
+                    raise ValueError(
+                        "Auxiliary variable function not defined.")
+                f = self.pde(model.net.inputs, outputs,
+                             model.net.auxiliary_vars)
             if not isinstance(f, (list, tuple)):
                 f = [f]
 
@@ -110,14 +115,15 @@ class PDE(Data):
         def losses_train():
             f_train = f
             bcs_start = np.cumsum([0] + self.num_bcs)
-            error_f = [fi[bcs_start[-1] :] for fi in f_train]
+            error_f = [fi[bcs_start[-1]:] for fi in f_train]
             losses = [
                 loss[i](tf.zeros(tf.shape(error), dtype=config.real(tf)), error)
                 for i, error in enumerate(error_f)
             ]
             for i, bc in enumerate(self.bcs):
                 beg, end = bcs_start[i], bcs_start[i + 1]
-                error = bc.error(self.train_x, model.net.inputs, outputs, beg, end)
+                error = bc.error(
+                    self.train_x, model.net.inputs, outputs, beg, end)
                 losses.append(
                     loss[len(error_f) + i](
                         tf.zeros(tf.shape(error), dtype=config.real(tf)), error
@@ -181,6 +187,9 @@ class PDE(Data):
         if self.auxiliary_var_fn is not None:
             self.train_aux_vars = self.auxiliary_var_fn(self.train_x)
 
+    def set_custom_train_points(self, points):
+        self.custom_train_points = np.array(points)
+
     def train_points(self):
         X = np.empty((0, self.geom.dim))
         if self.num_domain > 0:
@@ -190,10 +199,12 @@ class PDE(Data):
                 X = self.geom.random_points(
                     self.num_domain, random=self.train_distribution
                 )
+            elif self.train_distribution == "custom":
+                X = self.custom_train_points
         if self.num_boundary > 0:
             if self.train_distribution == "uniform":
                 tmp = self.geom.uniform_boundary_points(self.num_boundary)
-            elif self.train_distribution in ["pseudo", "sobol"]:
+            elif self.train_distribution in ["pseudo", "sobol", "custom"]:
                 tmp = self.geom.random_boundary_points(
                     self.num_boundary, random=self.train_distribution
                 )

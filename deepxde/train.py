@@ -10,7 +10,8 @@ from .backend import tf
 
 
 def is_scipy_opts(optimizer):
-    scipy_opts = ["BFGS", "L-BFGS-B", "Nelder-Mead", "Powell", "CG", "Newton-CG"]
+    scipy_opts = ["BFGS", "L-BFGS-B",
+                  "Nelder-Mead", "Powell", "CG", "Newton-CG"]
     return optimizer in scipy_opts
 
 
@@ -31,8 +32,8 @@ def get_train_op(loss, optimizer, lr=None, decay=None):
                 "ftol": np.finfo(float).eps,
                 "gtol": 1e-5,
                 "eps": 1e-8,
-                "maxfun": 15000,
-                "maxiter": 15000,
+                "maxfun": 20000,
+                "maxiter": 20000,
                 "maxls": 50,
             },
         )
@@ -43,7 +44,8 @@ def get_train_op(loss, optimizer, lr=None, decay=None):
     lr, global_step = _get_learningrate(lr, decay)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
-        train_op = _get_optimizer(optimizer, lr).minimize(loss, global_step=global_step)
+        train_op = _get_optimizer(optimizer, lr).minimize(
+            loss, global_step=global_step)
     return train_op
 
 

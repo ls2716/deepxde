@@ -235,7 +235,8 @@ class Timer(Callback):
             self.model.stop_training = True
             print(
                 "\nStop training as time used up. time used: {:.1f} mins, epoch trained: {}".format(
-                    (time.time() - self.t_start) / 60, self.model.train_state.epoch
+                    (time.time() - self.t_start) /
+                    60, self.model.train_state.epoch
                 )
             )
 
@@ -259,7 +260,8 @@ class VariableValue(Callback):
         self.period = period
         self.precision = precision
 
-        self.file = sys.stdout if filename is None else open(filename, "w", buffering=1)
+        self.file = sys.stdout if filename is None else open(
+            filename, "w", buffering=1)
         self.value = None
         self.epochs_since_last = 0
 
@@ -304,7 +306,8 @@ class OperatorPredictor(Callback):
 
     def on_predict_end(self):
         self.value = self.model.sess.run(
-            self.tf_op, feed_dict=self.model.net.feed_dict(False, False, 2, self.x)
+            self.tf_op, feed_dict=self.model.net.feed_dict(
+                False, False, 2, self.x)
         )
 
     def get_value(self):
@@ -347,7 +350,8 @@ class MovieDumper(Callback):
         self.filename = filename
         x1 = np.array(x1)
         x2 = np.array(x2)
-        self.x = x1 + (x2 - x1) / (num_points - 1) * np.arange(num_points)[:, None]
+        self.x = x1 + (x2 - x1) / (num_points - 1) * \
+            np.arange(num_points)[:, None]
         self.period = period
         self.component = component
         self.save_spectrum = save_spectrum
@@ -362,7 +366,8 @@ class MovieDumper(Callback):
         self.feed_dict = self.model.net.feed_dict(False, False, 2, self.x)
 
     def on_train_begin(self):
-        self.y.append(self.model.sess.run(self.tf_op, feed_dict=self.feed_dict))
+        self.y.append(self.model.sess.run(
+            self.tf_op, feed_dict=self.feed_dict))
         if self.save_spectrum:
             A = np.fft.rfft(self.y[-1])
             self.spectrum.append(np.abs(A))
@@ -409,3 +414,60 @@ class MovieDumper(Callback):
                 save_animation(
                     fname_movie, xdata, self.spectrum, logy=True, y_reference=np.abs(A)
                 )
+
+
+class LossUpdateCheckpoint(Callback):
+    """Assign loss weightis to BC losses to offset gradient pathologies
+    """
+
+    def __init__(self, verbose=0, period=1, base_range=None, update_range=None):
+        super(LossUpdateCheckpoint, self).__init__()
+        self.verbose = verbose
+        self.period = period
+        self.epochs_since_last_update = 0
+        if base_range is None:
+            raise ValueError('Base range has to be defined')
+        if update_range is None:
+            raise ValueError('Update range has to be defined')
+        self.base_range = base_range
+        self.update_range = update_range
+
+    def on_epoch_end(self):
+        self.epochs_since_last_update += 1
+        if self.epochs_since_last_update < self.period:
+            return
+        self.epochs_since_last_update = 0
+        losses = self.model.sess.run(
+            self.model.losses,
+            feed_dict=update_dict(
+                self.model.net.feed_dict(
+                    True,
+                    True,
+                    0,
+                    self.model.train_state.X_train,
+                    self.model.train_state.y_train,
+                    self.model.train_state.train_aux_vars,
+                ),
+                {self.model.loss_weights: np.ones(
+                    shape=self.model.loss_weights_input.shape)}
+            ),
+        )
+        base_mean = 0
+        for i in self.base_range:
+            base_mean += losses[i]
+        base_mean /= len(self.base_range)
+        for i in self.update_range:
+            self.model.loss_weights_input[i] = max(1, losses[i]/base_mean)
+
+        if self.verbose > 0:
+            print(
+                "Epoch {epoch}: Loss weights has been updated...\n {loss_weights}\n".format(
+                    loss_weights=self.model.loss_weights_input,
+                    epoch=self.model.train_state.epoch,
+                )
+            )
+
+
+def update_dict(dict1, dict2):
+    dict1.update(dict2)
+    return dict1

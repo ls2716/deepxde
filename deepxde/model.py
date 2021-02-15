@@ -32,6 +32,7 @@ class Model(object):
         self.batch_size = None
 
         self.losses = None
+        self.loss_weights = None
         self.totalloss = None
         self.train_op = None
         self.metrics = None
@@ -84,15 +85,23 @@ class Model(object):
         self.optimizer = optimizer
 
         loss = losses_module.get(loss)
-        self.losses = self.data.losses(self.net.targets, self.net.outputs, loss, self)
+        self.losses = self.data.losses(
+            self.net.targets, self.net.outputs, loss, self)
         if not isinstance(self.losses, list):
             self.losses = [self.losses]
         if self.net.regularizer is not None:
             self.losses.append(tf.losses.get_regularization_loss())
+
         self.losses = tf.convert_to_tensor(self.losses)
-        if loss_weights is not None:
-            self.losses *= loss_weights
-            self.losshistory.set_loss_weights(loss_weights)
+        if loss_weights is None:
+            loss_weights = np.ones(shape=self.losses.shape)
+        self.loss_weights_input = np.array(loss_weights, dtype=np.float)
+        self.loss_weights = tf.placeholder(
+            tf.float32, shape=self.losses.shape, name='loss_weights')
+        self.losses = self.losses*self.loss_weights
+        # if loss_weights is not None:
+        #     self.losses *= loss_weights
+        #     self.losshistory.set_loss_weights(loss_weights)
         self.totalloss = tf.reduce_sum(self.losses)
 
         self.train_op = train_module.get_train_op(
@@ -148,7 +157,8 @@ class Model(object):
 
         print("Training model...\n")
         self.stop_training = False
-        self.train_state.set_data_train(*self.data.train_next_batch(self.batch_size))
+        self.train_state.set_data_train(
+            *self.data.train_next_batch(self.batch_size))
         self.train_state.set_data_test(*self.data.test())
         self._test(uncertainty)
         self.callbacks.on_train_begin()
@@ -183,7 +193,8 @@ class Model(object):
         self.callbacks.on_predict_begin()
         if operator is None:
             y = self.sess.run(
-                self.net.outputs, feed_dict=self.net.feed_dict(False, False, 2, x)
+                self.net.outputs, feed_dict=self.net.feed_dict(
+                    False, False, 2, x)
             )
         else:
             if get_num_args(operator) == 2:
@@ -219,13 +230,16 @@ class Model(object):
             )
             self.sess.run(
                 self.train_op,
-                feed_dict=self.net.feed_dict(
-                    True,
-                    True,
-                    0,
-                    self.train_state.X_train,
-                    self.train_state.y_train,
-                    self.train_state.train_aux_vars,
+                feed_dict=update_dict(
+                    self.net.feed_dict(
+                        True,
+                        True,
+                        0,
+                        self.train_state.X_train,
+                        self.train_state.y_train,
+                        self.train_state.train_aux_vars,
+                    ),
+                    {self.loss_weights: self.loss_weights_input}
                 ),
             )
 
@@ -253,16 +267,19 @@ class Model(object):
                 )
                 display.training_display(self.train_state)
 
-        self.train_state.set_data_train(*self.data.train_next_batch(self.batch_size))
+        self.train_state.set_data_train(
+            *self.data.train_next_batch(self.batch_size))
         self.train_op.minimize(
             self.sess,
-            feed_dict=self.net.feed_dict(
+            feed_dict=update_dict(self.net.feed_dict(
                 True,
                 True,
                 0,
                 self.train_state.X_train,
                 self.train_state.y_train,
                 self.train_state.train_aux_vars,
+            ),
+                {self.loss_weights: self.loss_weights_input}
             ),
             fetches=[self.losses],
             loss_callback=loss_callback,
@@ -272,13 +289,16 @@ class Model(object):
     def _test(self, uncertainty):
         self.train_state.loss_train, self.train_state.y_pred_train = self.sess.run(
             [self.losses, self.net.outputs],
-            feed_dict=self.net.feed_dict(
-                False,
-                False,
-                0,
-                self.train_state.X_train,
-                self.train_state.y_train,
-                self.train_state.train_aux_vars,
+            feed_dict=update_dict(
+                self.net.feed_dict(
+                    False,
+                    False,
+                    0,
+                    self.train_state.X_train,
+                    self.train_state.y_train,
+                    self.train_state.train_aux_vars,
+                ),
+                {self.loss_weights: self.loss_weights_input}
             ),
         )
 
@@ -305,13 +325,16 @@ class Model(object):
         else:
             self.train_state.loss_test, self.train_state.y_pred_test = self.sess.run(
                 [self.losses, self.net.outputs],
-                feed_dict=self.net.feed_dict(
-                    False,
-                    False,
-                    1,
-                    self.train_state.X_test,
-                    self.train_state.y_test,
-                    self.train_state.test_aux_vars,
+                feed_dict=update_dict(
+                    self.net.feed_dict(
+                        False,
+                        False,
+                        1,
+                        self.train_state.X_test,
+                        self.train_state.y_test,
+                        self.train_state.test_aux_vars,
+                    ),
+                    {self.loss_weights: self.loss_weights_input}
                 ),
             )
 
@@ -368,7 +391,8 @@ class Model(object):
                 )
             )
         if protocol == "tf.train.Saver":
-            self.saver.save(self.sess, save_path, global_step=self.train_state.epoch)
+            self.saver.save(self.sess, save_path,
+                            global_step=self.train_state.epoch)
         elif protocol == "pickle":
             with open("{}-{}.pkl".format(save_path, self.train_state.epoch), "wb") as f:
                 pickle.dump(self.state_dict(), f)
@@ -461,3 +485,8 @@ class LossHistory(object):
             metrics_test = self.metrics_test[-1]
         self.loss_test.append(loss_test)
         self.metrics_test.append(metrics_test)
+
+
+def update_dict(dict1, dict2):
+    dict1.update(dict2)
+    return dict1

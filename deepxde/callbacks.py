@@ -438,31 +438,31 @@ class LossUpdateCheckpoint(Callback):
     def on_epoch_end(self):
         self.epochs_since_last_update += 1
         self.epochs_since_last_display += 1
-        if self.epochs_since_last_update < self.period:
-            return
-        self.epochs_since_last_update = 0
-        losses = self.model.sess.run(
-            self.model.losses,
-            feed_dict=update_dict(
-                self.model.net.feed_dict(
-                    True,
-                    True,
-                    0,
-                    self.model.train_state.X_train,
-                    self.model.train_state.y_train,
-                    self.model.train_state.train_aux_vars,
+        if self.epochs_since_last_update >= self.period:
+            self.epochs_since_last_update = 0
+            losses = self.model.sess.run(
+                self.model.losses,
+                feed_dict=update_dict(
+                    self.model.net.feed_dict(
+                        True,
+                        True,
+                        0,
+                        self.model.train_state.X_train,
+                        self.model.train_state.y_train,
+                        self.model.train_state.train_aux_vars,
+                    ),
+                    {self.model.loss_weights: np.ones(
+                        shape=self.model.loss_weights_input.shape)}
                 ),
-                {self.model.loss_weights: np.ones(
-                    shape=self.model.loss_weights_input.shape)}
-            ),
-        )
-        base_mean = 0
-        for i in self.base_range:
-            base_mean += losses[i]
-        base_mean /= len(self.base_range)
-        for i in self.update_range:
-            self.model.loss_weights_input[i] = self.model.loss_weights_input[i] * \
-                self.momentum + max(1, losses[i]/base_mean) * (1-self.momentum)
+            )
+            base_mean = 0
+            for i in self.base_range:
+                base_mean += losses[i]
+            base_mean /= len(self.base_range)
+            for i in self.update_range:
+                self.model.loss_weights_input[i] = self.model.loss_weights_input[i] * \
+                    self.momentum + \
+                    max(1, losses[i]/base_mean) * (1-self.momentum)
 
         if self.verbose > 0 and self.epochs_since_last_display >= self.report_period:
             self.epochs_since_last_display = 0

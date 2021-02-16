@@ -90,7 +90,8 @@ class Rectangle(Hypercube):
         self.area = np.prod(self.xmax - self.xmin)
 
     def uniform_boundary_points(self, n):
-        nx, ny = np.ceil(n / self.perimeter * (self.xmax - self.xmin)).astype(int)
+        nx, ny = np.ceil(n / self.perimeter *
+                         (self.xmax - self.xmin)).astype(int)
         xbot = np.hstack(
             (
                 np.linspace(self.xmin[0], self.xmax[0], num=nx, endpoint=False)[
@@ -122,7 +123,8 @@ class Rectangle(Hypercube):
         x = np.vstack((xbot, yrig, xtop, ylef))
         if n != len(x):
             print(
-                "Warning: {} points required, but {} points sampled.".format(n, len(x))
+                "Warning: {} points required, but {} points sampled.".format(
+                    n, len(x))
             )
         return x
 
@@ -210,7 +212,8 @@ class Triangle(Geometry):
 
         super(Triangle, self).__init__(
             2,
-            (np.minimum(x1, np.minimum(x2, x3)), np.maximum(x1, np.maximum(x2, x3))),
+            (np.minimum(x1, np.minimum(x2, x3)),
+             np.maximum(x1, np.maximum(x2, x3))),
             self.l12
             * self.l23
             * self.l31
@@ -245,7 +248,8 @@ class Triangle(Geometry):
         l2 = np.linalg.norm(x - self.x2)
         l3 = np.linalg.norm(x - self.x3)
         return np.any(
-            np.isclose([l1 + l2 - self.l12, l2 + l3 - self.l23, l3 + l1 - self.l31], 0)
+            np.isclose([l1 + l2 - self.l12, l2 + l3 -
+                        self.l23, l3 + l1 - self.l31], 0)
         )
 
     def boundary_normal(self, x):
@@ -310,7 +314,8 @@ class Triangle(Geometry):
         x = np.vstack((x12, x23, x31))
         if n != len(x):
             print(
-                "Warning: {} points required, but {} points sampled.".format(n, len(x))
+                "Warning: {} points required, but {} points sampled.".format(
+                    n, len(x))
             )
         return x
 
@@ -323,7 +328,8 @@ class Triangle(Geometry):
         if random == "sobol":
             u = np.ravel(sobol_sequence.sample(n + 3, 1))[1:]
             u = u[np.logical_not(np.isclose(u, self.l12 / self.perimeter))]
-            u = u[np.logical_not(np.isclose(u, (self.l12 + self.l23) / self.perimeter))]
+            u = u[np.logical_not(np.isclose(
+                u, (self.l12 + self.l23) / self.perimeter))]
             u = u[:n]
         else:
             u = np.random.rand(n)
@@ -349,9 +355,11 @@ class Polygon(Geometry):
     def __init__(self, vertices):
         self.vertices = np.array(vertices)
         if len(vertices) == 3:
-            raise ValueError("The polygon is a triangle. Use Triangle instead.")
+            raise ValueError(
+                "The polygon is a triangle. Use Triangle instead.")
         if Rectangle.is_valid(self.vertices):
-            raise ValueError("The polygon is a rectangle. Use Rectangle instead.")
+            raise ValueError(
+                "The polygon is a rectangle. Use Rectangle instead.")
 
         self.diagonals = spatial.distance.squareform(
             spatial.distance.pdist(self.vertices)
@@ -433,7 +441,8 @@ class Polygon(Geometry):
         x = np.vstack(x)
         if n != len(x):
             print(
-                "Warning: {} points required, but {} points sampled.".format(n, len(x))
+                "Warning: {} points required, but {} points sampled.".format(
+                    n, len(x))
             )
         return x
 
@@ -460,12 +469,14 @@ class Polygon(Geometry):
         i = -1
         l0 = 0
         l1 = l0 + self.diagonals[i, i + 1]
-        v = (self.vertices[i + 1] - self.vertices[i]) / self.diagonals[i, i + 1]
+        v = (self.vertices[i + 1] - self.vertices[i]) / \
+            self.diagonals[i, i + 1]
         for l in u:
             if l > l1:
                 i += 1
                 l0, l1 = l1, l1 + self.diagonals[i, i + 1]
-                v = (self.vertices[i + 1] - self.vertices[i]) / self.diagonals[i, i + 1]
+                v = (self.vertices[i + 1] - self.vertices[i]
+                     ) / self.diagonals[i, i + 1]
             x.append((l - l0) * v + self.vertices[i])
         return np.vstack((self.vertices, x))
 

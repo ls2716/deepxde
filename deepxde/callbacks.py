@@ -464,7 +464,7 @@ class LossUpdateCheckpoint(Callback):
             self.model.loss_weights_input[i] = self.model.loss_weights_input[i] * \
                 self.momentum + max(1, losses[i]/base_mean) * (1-self.momentum)
 
-        if self.verbose > 0 and self.epochs_since_last_display > self.report_period:
+        if self.verbose > 0 and self.epochs_since_last_display >= self.report_period:
             self.epochs_since_last_display = 0
             print(
                 "Epoch {epoch}: Loss weights has been updated...\n {loss_weights}\n".format(

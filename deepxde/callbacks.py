@@ -420,20 +420,24 @@ class LossUpdateCheckpoint(Callback):
     """Assign loss weightis to BC losses to offset gradient pathologies
     """
 
-    def __init__(self, verbose=0, period=1, base_range=None, update_range=None):
+    def __init__(self, momentum, verbose=0, period=1, report_period=100, base_range=None, update_range=None):
         super(LossUpdateCheckpoint, self).__init__()
         self.verbose = verbose
         self.period = period
+        self.report_period = report_period
         self.epochs_since_last_update = 0
+        self.epochs_since_last_display = 0
         if base_range is None:
             raise ValueError('Base range has to be defined')
         if update_range is None:
             raise ValueError('Update range has to be defined')
         self.base_range = base_range
         self.update_range = update_range
+        self.momentum = momentum
 
     def on_epoch_end(self):
         self.epochs_since_last_update += 1
+        self.epochs_since_last_display += 1
         if self.epochs_since_last_update < self.period:
             return
         self.epochs_since_last_update = 0
@@ -457,12 +461,14 @@ class LossUpdateCheckpoint(Callback):
             base_mean += losses[i]
         base_mean /= len(self.base_range)
         for i in self.update_range:
-            self.model.loss_weights_input[i] = max(1, losses[i]/base_mean)
+            self.model.loss_weights_input[i] = self.model.loss_weights_input[i] * \
+                self.momentum + max(1, losses[i]/base_mean) * (1-self.momentum)
 
-        if self.verbose > 0:
+        if self.verbose > 0 and self.epochs_since_last_display > self.report_period:
+            self.epochs_since_last_display = 0
             print(
                 "Epoch {epoch}: Loss weights has been updated...\n {loss_weights}\n".format(
-                    loss_weights=self.model.loss_weights_input,
+                    loss_weights=list_to_str(self.model.loss_weights_input),
                     epoch=self.model.train_state.epoch,
                 )
             )

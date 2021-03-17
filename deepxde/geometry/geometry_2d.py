@@ -64,6 +64,8 @@ class Disk(Geometry):
             u = np.random.rand(n, 1)
         elif random == "sobol":
             u = sobol_sequence.sample(n, 1)
+        else:
+            u = np.random.rand(n, 1)
         theta = 2 * np.pi * u
         X = np.hstack((np.cos(theta), np.sin(theta)))
         return self.radius * X + self.center

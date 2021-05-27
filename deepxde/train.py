@@ -30,10 +30,10 @@ def get_train_op(loss, optimizer, lr=None, decay=None):
                 "disp": None,
                 "maxcor": 50,
                 "ftol": np.finfo(float).eps,
-                "gtol": 1e-5,
+                "gtol": np.finfo(float).eps, #1e-8,
                 "eps": 1e-8,
-                "maxfun": 20000,
-                "maxiter": 20000,
+                "maxfun": 60000,
+                "maxiter": 60000,
                 "maxls": 50,
             },
         )
